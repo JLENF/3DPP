@@ -1,3 +1,7 @@
 .DS_Store
 *.gcode
 print_colors/print_colors_v2.py
+print_colors/merged-gcode.ok
+print_colors/temp/print_colors_v2.py
+print_colors/temp/print_colors_v4.py
+print_colors/temp/print_colors-v3.py

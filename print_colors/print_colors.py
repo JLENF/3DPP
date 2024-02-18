@@ -1,3 +1,13 @@
+# This script is used to merge gcode files from different colors to print a multicolor object
+# Created by: Jairo Lenfers - 2024-02-17
+# Last update: 2024-02-17
+#
+# Save all gcode files in the same folder and run this script
+# The gcode files should be named with the following pattern: number-color.gcode, e.g. 0-black.gcode
+# The start and the end of the merged gcode file will be get from the file 0-black.gcode because it's the last color to be printed
+# Eg of the name of files:
+# 0-black.gcode, 1-white.gcode, 2-red.gcode, etc
+
 import os
 import sys
 
@@ -16,7 +26,9 @@ def start_copying_gcode(output_filename):
     try:
         with open('0-black.gcode', 'r') as f:
             for line in f:
-                if line.startswith(('G0 F4800')) and ' Z0.3' in line:
+                # other method to detect if layer height is changed
+                #if line.startswith(('G0 F4800')) and ' Z0.3' in line:
+                if line == ';LAYER:0\n':
                     break
                 else:
                     with open(output_filename, 'a') as output_file:
@@ -47,10 +59,14 @@ def process_gcode_files(output_filename):
     layer_height_value = 0
     # for use to processing current layer height
     current_layer_height = 0.3
+    current_layer_number = int(0)
     stay_copying = True
+    # create a dictionary to store the last E value for each color
+    e_values = {}
     
     while stay_copying:
-        for file in os.listdir():
+        # use sorted with reverse=True to use others colors first and black last
+        for file in sorted(os.listdir(), reverse=True):
             if file.endswith('.gcode'):
                 # processing only gcode files with start with number
                 if not file[0].isdigit():
@@ -87,40 +103,64 @@ def process_gcode_files(output_filename):
                 with open(file, 'r') as f:
                     for line in f:
                         #print(line)
-                        if line.endswith('Z' + str(current_layer_height) + '\n' ):
-                            print(f'Layer {current_layer_height} detected! Start copying lines from file: {file}')
+                        # other method to detect if layer height is changed
+                        #if line.endswith('Z' + str(current_layer_height) + '\n' ):
+                        if line == ';LAYER:' + str(current_layer_number) + '\n':
+                            print(f'Layer {current_layer_number} detected! Start copying lines from file: {file}')
                             copy_line = True
                             with open(output_filename, 'a') as output_file:
                                 output_file.write('; Start copying lines from file: ' + file + '\n')
-                                # pause to change filament
-                                output_file.write('; Pause to change filament\n')
-                                output_file.write('M25\n')
-                                output_file.write(line)
+                                # first disable cooler, because it's not working with Qidi 3D printer
+                                output_file.write('M107 ; Turn off fan\n')
                                 # set temperature
                                 if color in temperatures:
-                                    #output_file.write('M104 S' + str(temperatures[color]) + '\n')
-                                    output_file.write('M109 S' + str(temperatures[color]) + '\n')
+                                    output_file.write('M104 S' + str(temperatures[color]) + '\n')
                                 else:
                                     print('Color not found in temperatures:', color)
                                     print('Aborting...')
-                                    sys.exit(1)
+                                    sys.exit(1)                                
+                                # pause to change filament
+                                output_file.write('; Pause to change filament\n')
+                                output_file.write('M300 I9000 ;Buzzer sounds\n')
+                                output_file.write('M25 ; Pause print to change filament\n')
+                                # wait for temperature
+                                if color in temperatures:
+                                    output_file.write('M109 S' + str(temperatures[color]) + '\n')
+                                # if layer is the first, set E value to 0
+                                if current_layer_number == 0:
+                                    output_file.write('G92 E0\n')
+                                else:
+                                    # set last E value for this color
+                                    if color in e_values:
+                                        output_file.write('G92 E' + e_values[color] + '\n')
+                                output_file.write(line)
                                 continue
                             
                         if copy_line:
-                            if line.startswith(('G0', 'G1')):
-                                if line.endswith('Z' + str(round(current_layer_height + layer_height_value, 2)) + '\n'):
-                                    print('Next layer detected, stop of copying lines from file:', file)
-                                    copy_line = False
-                                    continue
-                                with open(output_filename, 'a') as output_file:
-                                    output_file.write(line)
-                            else:
-                                if line == 'M106 T-2 S0\n':
-                                    print('End of file detected, stop of copying lines from file:', file)
-                                    copy_line = False
-                                    stay_copying = False
-                                    break
-        current_layer_height = round(current_layer_height + layer_height_value, 2)
+                            # detect the last E value to use in the next file
+                            if line.startswith(('G0', 'G1')) and ' E' in line:
+                                e_value = line.split(' E')[1].split(' ')[0]
+                                # insert E value in dictionary with actual color to use in the next file
+                                e_values[color] = e_value
+                                # other method to detect if layer height is changed
+                                # if line.endswith('Z' + str(round(current_layer_height + layer_height_value, 2)) + '\n'):
+                                #     print('Next layer detected, stop of copying lines from file:', file)
+                                #     copy_line = False
+                                #     continue
+                            if line == ';LAYER:' + str(current_layer_number + 1) + '\n':
+                                print('Next layer detected, stop of copying lines from file:', file)
+                                copy_line = False
+                                continue
+                            if line == 'M106 T-2 S0\n':
+                                print('End of file detected, stop of copying lines from file:', file)
+                                copy_line = False
+                                stay_copying = False
+                                break
+                            with open(output_filename, 'a') as output_file:
+                                output_file.write(line)
+        # other method to detect if layer height is changed                               
+        #current_layer_height = round(current_layer_height + layer_height_value, 2)
+        current_layer_number += 1
 
 if __name__ == "__main__": 
     output_filename = 'merged.gcode'
