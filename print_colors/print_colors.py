@@ -61,6 +61,7 @@ def process_gcode_files(output_filename):
     current_layer_height = 0.3
     current_layer_number = int(0)
     stay_copying = True
+    last_color = ''
     # create a dictionary to store the last E value for each color
     e_values = {}
     
@@ -108,33 +109,37 @@ def process_gcode_files(output_filename):
                         if line == ';LAYER:' + str(current_layer_number) + '\n':
                             print(f'Layer {current_layer_number} detected! Start copying lines from file: {file}')
                             copy_line = True
-                            with open(output_filename, 'a') as output_file:
-                                output_file.write('; Start copying lines from file: ' + file + '\n')
-                                # first disable cooler, because it's not working with Qidi 3D printer
-                                output_file.write('M107 ; Turn off fan\n')
-                                # set temperature
-                                if color in temperatures:
-                                    output_file.write('M104 S' + str(temperatures[color]) + '\n')
-                                else:
-                                    print('Color not found in temperatures:', color)
-                                    print('Aborting...')
-                                    sys.exit(1)                                
-                                # pause to change filament
-                                output_file.write('; Pause to change filament\n')
-                                output_file.write('M300 I9000 ;Buzzer sounds\n')
-                                output_file.write('M25 ; Pause print to change filament\n')
-                                # wait for temperature
-                                if color in temperatures:
-                                    output_file.write('M109 S' + str(temperatures[color]) + '\n')
-                                # if layer is the first, set E value to 0
-                                if current_layer_number == 0:
-                                    output_file.write('G92 E0\n')
-                                else:
-                                    # set last E value for this color
-                                    if color in e_values:
-                                        output_file.write('G92 E' + e_values[color] + '\n')
-                                output_file.write(line)
-                                continue
+                            # only put commands to change filament when color it's different from the last color
+                            if color != last_color:
+                                last_color = color
+                                with open(output_filename, 'a') as output_file:
+                                    output_file.write('; Start copying lines from file: ' + file + '\n')
+                                    # first disable cooler, because it's not working with Qidi 3D printer
+                                    output_file.write('M107 ; Turn off fan\n')
+                                    # set temperature
+                                    if color in temperatures:
+                                        output_file.write('M104 S' + str(temperatures[color]) + '\n')
+                                    else:
+                                        print('Color not found in temperatures:', color)
+                                        print('Aborting...')
+                                        sys.exit(1)                                
+                                    # pause to change filament
+                                    output_file.write('; Pause to change filament\n')
+                                    output_file.write('M300 I9000 ;Buzzer sounds\n')
+                                    output_file.write('M25 ; Pause print to change filament\n')
+                                    # wait for temperature
+                                    if color in temperatures:
+                                        output_file.write('M109 S' + str(temperatures[color]) + '\n')
+                                    # if layer is the first, set E value to 0
+                                    if current_layer_number == 0:
+                                        output_file.write('G92 E0\n')
+                                    else:
+                                        # set last E value for this color
+                                        if color in e_values:
+                                            output_file.write('G92 E' + e_values[color] + '\n')
+                                    # copy line to new file
+                                    output_file.write(line)
+                                    continue
                             
                         if copy_line:
                             # detect the last E value to use in the next file
@@ -151,11 +156,15 @@ def process_gcode_files(output_filename):
                                 print('Next layer detected, stop of copying lines from file:', file)
                                 copy_line = False
                                 continue
-                            if line == 'M106 T-2 S0\n':
-                                print('End of file detected, stop of copying lines from file:', file)
+                            # detect end of file on each color
+                            if 'M106 T-2 S0\n' in line:
                                 copy_line = False
-                                stay_copying = False
-                                break
+                                # only stop script when black color has this line - back color is the last color to be printed
+                                if color == 'black':
+                                    print('End of file detected, stop of copying lines from file:', file)
+                                    stay_copying = False
+                                    break
+                                continue
                             with open(output_filename, 'a') as output_file:
                                 output_file.write(line)
         # other method to detect if layer height is changed                               
@@ -168,11 +177,11 @@ if __name__ == "__main__":
     # set temperatures for each color, because each color may have different suplier and may have different melting point
     # see the folder temperature_tower to find the best temperature for each color
     temperatures = {
-        'black': 200,
+        'black': 210,
         'white': 160,
-        'red': 200,
-        'blue': 200,
-        'green': 200,
+        'red': 210,
+        'blue': 210,
+        'green': 210,
     }
  
     remove_merged_gcode(output_filename)
