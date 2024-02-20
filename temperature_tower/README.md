@@ -2,7 +2,6 @@
 
 python script to insert in gcode files all steps of temperatute tower.
 
-
 #### Example of use:
 8: Every 8mm the temperature will change
 255: First step temperature in degrees °C
