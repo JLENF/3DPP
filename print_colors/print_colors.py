@@ -1,6 +1,6 @@
 # This script is used to merge gcode files from different colors to print a multicolor object
 # Created by: Jairo Lenfers - 2024-02-17
-# Last update: 2024-02-17
+# Last update: 2024-07-28
 #
 # Save all gcode files in the same folder and run this script
 # The gcode files should be named with the following pattern: number-color.gcode, e.g. 0-black.gcode
@@ -10,6 +10,8 @@
 
 import os
 import sys
+import argparse
+import glob
 
 # remove merged.gcode if exists
 def remove_merged_gcode(output_filename):
@@ -21,14 +23,19 @@ def remove_merged_gcode(output_filename):
 
 # check if file 0-black.gcode exists and get first lines of gcode, then write to new file merged.gcode
 # stop copy lines at line: "G0 F4800 X137.863 Y77.695 Z0.3" with X and Y variable values
-def start_copying_gcode(output_filename):
+def start_copying_gcode(output_filename, number_top_layer):
     print('Start creating merged.gcode with first lines...')
     try:
+        if number_top_layer > 0:
+            layer_stop = ';LAYER:' + str(int(number_top_layer)) + '\n'
+            print('Black layer - stop copying at layer:', str(int(number_top_layer)))
+        else:
+            layer_stop = ';LAYER:0\n'
         with open('0-black.gcode', 'r') as f:
             for line in f:
                 # other method to detect if layer height is changed
                 #if line.startswith(('G0 F4800')) and ' Z0.3' in line:
-                if line == ';LAYER:0\n':
+                if line == layer_stop:
                     break
                 else:
                     with open(output_filename, 'a') as output_file:
@@ -53,13 +60,16 @@ def end_copying_gcode(output_filename):
         print('File 0-black.gcode not found')
         sys.exit(1)
         
-def process_gcode_files(output_filename):
+def process_gcode_files(output_filename, number_top_layer):
     # set variables
     # for use to check if layer height is consistent in all gcode files
     layer_height_value = 0
     # for use to processing current layer height
     current_layer_height = 0.3
-    current_layer_number = int(0)
+    if number_top_layer > 0:
+        current_layer_number = int(number_top_layer)
+    else:
+        current_layer_number = int(0)
     stay_copying = True
     last_color = ''
     # create a dictionary to store the last E value for each color
@@ -171,7 +181,31 @@ def process_gcode_files(output_filename):
         #current_layer_height = round(current_layer_height + layer_height_value, 2)
         current_layer_number += 1
 
-if __name__ == "__main__": 
+def get_top_layer():
+    pattern = '1-*.gcode'
+    files = glob.glob(pattern)
+    if files:
+        # select first file with pattern
+        gcode_file = files[0]
+        with open(gcode_file, 'r') as f:
+            for line in f:
+                if ';LAYER_COUNT:' in line:
+                    layer_count = float(line.split(':')[1])
+                    return layer_count                
+    return 0
+               
+if __name__ == "__main__":
+    # check if layer is parsed, to use with top layer
+    parser = argparse.ArgumentParser(description='print_colors.py - to print colors in 3D printer.')
+    parser.add_argument('--layer', type=int, help='number of last layer')
+    args = parser.parse_args()
+    top_layer = args.layer
+    number_top_layer = 0
+    if top_layer is not None:
+        if top_layer > 0:
+            # get number of layer to print in black color before print top layer in other color
+            number_top_layer = get_top_layer() - top_layer
+
     output_filename = 'merged.gcode'
     
     # set temperatures for each color, because each color may have different suplier and may have different melting point
@@ -185,8 +219,8 @@ if __name__ == "__main__":
     }
  
     remove_merged_gcode(output_filename)
-    start_copying_gcode(output_filename)
-    process_gcode_files(output_filename)
+    start_copying_gcode(output_filename, number_top_layer)
+    process_gcode_files(output_filename,number_top_layer)
     end_copying_gcode(output_filename)
     
     print('Done')
