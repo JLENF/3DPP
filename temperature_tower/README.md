@@ -3,11 +3,12 @@
 python script to insert in gcode files all steps of temperatute tower.
 
 #### Example of use:
-8: Every 8mm the temperature will change
-255: First step temperature in degrees °C
-5: Temperature steps in °C
 
 ```bash
+# 8: Every 8mm the temperature will change
+# 255: First step temperature in degrees °C
+# 5: Temperature steps in °C
+
 python3 temperature_tower.py Temperature_Tower.gcode 8 255 5
 ```
 
@@ -28,4 +29,5 @@ Height 80 mm: temperature set to 210°C
 
 #### Links:
 [STL file](https://www.thingiverse.com/thing:3127899)
+
 [Oliv github](https://gist.github.com/Oliv4945/6fc57ba41e442a1c0fe78b6d830da9ee)

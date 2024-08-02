@@ -1,7 +1,10 @@
 .DS_Store
-*.gcode
 print_colors/print_colors_v2.py
 print_colors/merged-gcode.ok
 print_colors/temp/print_colors_v2.py
 print_colors/temp/print_colors_v4.py
 print_colors/temp/print_colors-v3.py
+print_colors/0-black.gcode
+print_colors/1-green.gcode
+print_colors/merged.gcode
+temperature_tower/out_Temperature_Tower.gcode
